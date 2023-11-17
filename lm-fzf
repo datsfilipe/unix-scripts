@@ -2,9 +2,9 @@
 
 list_lists() {
   del_cmd="list-manager remove {}"
-  add_cmd="read -k 'REPLY?name: ' && echo \$REPLY | list-manager add \$REPLY"
+  add_cmd="read -r '?name: ' && echo \$REPLY | list-manager add \$REPLY"
   selected_option=$(list-manager list | fzf \
-    --bind "ctrl-o:execute($del_cmd)" \
+    --bind "ctrl-x:execute($del_cmd)" \
     --bind="ctrl-n:execute($add_cmd)")
 
   if [ -n "$selected_option" ]; then
@@ -17,11 +17,11 @@ list_lists() {
 list_items() {
   list_name="$1"
   del_cmd="list-manager remove $list_name {}"
-  add_cmd="read -k 'REPLY?content: ' && echo \$REPLY | list-manager add $list_name \$REPLY"
+  add_cmd="read -r '?content: ' && echo \$REPLY | list-manager add $list_name \$REPLY"
   while true; do
     options=("<--" $(list-manager list "$list_name"))
     selected_option=$(printf '%s\n' "${options[@]}" | fzf \
-      --bind "ctrl-o:execute($del_cmd)" \
+      --bind "ctrl-x:execute($del_cmd)" \
       --bind="ctrl-n:execute($add_cmd)")
 
     if [ -n "$selected_option" ]; then
@@ -42,12 +42,12 @@ open() {
   if [[ $item_content == *http*://* || $item_content == *https*://* ]]; then
     xdg-open "$item_content"
   else
-    read -k "copy to clipboard/edit [c/e]: " -n 1 -r
+    read -r "copy to clipboard/edit [c/e]: " -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Cc]$ ]]; then
       echo "$item_content" | wl-copy
     elif [[ $REPLY =~ ^[Ee]$ ]]; then
-      read -k "content/status [*/todo/doing/done]: " -r
+      read -r "content/status [*/todo/doing/done]: " -r
       echo ""
       list-manager edit "$list_name" "$item_content" "$REPLY"
     else
