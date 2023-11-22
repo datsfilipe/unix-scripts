@@ -12,8 +12,9 @@ if [ -f ".envrc" ]; then
   exit 0
 fi
 
-touch .envrc
-echo "use flake $DIR/$1" >> .envrc
+cp "$DIR/$1/.envrc" .
+line1="use flake $DIR/$1"
+sed -i "1s|.*|$line1|" .envrc
 
 direnv allow
 
