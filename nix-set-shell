@@ -2,8 +2,18 @@
 
 DIR="$HOME/.dotfiles/shells"
 
+if [ -z "$1" ]; then
+  echo "Please provide a shell"
+  exit 0
+fi
+
 if [ ! -d "$DIR/$1" ]; then
   echo "Provided shell not found"
+  exit 0
+fi
+
+if [ ! -d "$DIR/$2" ]; then
+  echo "Second provided shell not found"
   exit 0
 fi
 
@@ -15,6 +25,10 @@ fi
 cp "$DIR/$1/.envrc" .
 line1="use flake $DIR/$1"
 sed -i "1s|.*|$line1|" .envrc
+
+tail -n +2 "$DIR/$2/.envrc" >> .envrc
+line2="use flake $DIR/$2"
+sed -i "2s|.*|$line2\n|" .envrc
 
 direnv allow
 
