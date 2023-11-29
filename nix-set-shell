@@ -26,9 +26,11 @@ cp "$DIR/$1/.envrc" .
 line1="use flake $DIR/$1"
 sed -i "1s|.*|$line1|" .envrc
 
-tail -n +2 "$DIR/$2/.envrc" >> .envrc
-line2="use flake $DIR/$2"
-sed -i "2s|.*|$line2\n|" .envrc
+if [ -f "$DIR/$2/.envrc" ]; then
+  tail -n +2 "$DIR/$2/.envrc" >> .envrc
+  line2="use flake $DIR/$2"
+  sed -i "2s|.*|$line2\n|" .envrc
+fi
 
 direnv allow
 
