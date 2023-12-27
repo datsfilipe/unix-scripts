@@ -1,0 +1,51 @@
+#!/bin/sh
+
+vault_path="$HOME/.config/datsvault"
+term_app="alacritty"
+
+case "$1" in
+  -n)
+    title="$(date '+%Y-%m-%d')"
+    note_path="$vault_path/$title.md"
+    echo "---" >> "$note_path"
+    echo "title: \"$title\"" >> "$note_path"
+    echo "---" >> "$note_path"
+
+    tmux new-session -d -s "$title" "nvim '$note_path'; tmux kill-session -t $title"
+    $term_app -e tmux attach-session -t "$title" >/dev/null 2>&1 &
+    disown
+    ;;
+  -d)
+    note="$2"
+    note_path=$(fd "$note" "$vault_path" | head -n 1)
+    if [ -n "$note_path" ]; then
+      title=$(grep -m 1 '^title: ' "$note_path" | sed 's/^title: "\(.*\)"/\1/')
+      trash-put "$note_path"
+      echo "Note '$title' deleted."
+    else
+      echo "Note '$note' not found."
+      exit 1
+    fi
+    ;;
+  -l)
+    selected_note=$(fd '\.md$|\.mdx$' "$vault_path" --type f | fzf)
+    if [ -n "$selected_note" ]; then
+      title=$(grep -m 1 '^title: ' "$selected_note" | sed 's/^title: "\(.*\)"/\1/')
+      tmux new-session -d -s "$title" "nvim '$selected_note'; tmux kill-session -t $title"
+      $term_app -e tmux attach-session -t "$title" >/dev/null 2>&1 &
+      disown
+    fi
+    ;;
+  -s)
+    pushd "$vault_path" && git add . && git commit -m "Update notes" && git push origin main && popd
+    echo "Vault updated and pushed to the remote repository."
+    ;;
+  -u)
+    pushd "$vault_path" && git pull origin main && popd
+    echo "Vault updated with changes from the remote repository."
+    ;;
+  *)
+    echo "Usage: $0 [-n | -d note | -l | -s | -u]"
+    exit 1
+    ;;
+esac
