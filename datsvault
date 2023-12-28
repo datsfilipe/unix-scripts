@@ -1,7 +1,39 @@
 #!/bin/sh
 
-vault_path="$HOME/.config/datsvault"
-term_app="alacritty"
+config_file="$HOME/.config/datsvault.json"
+
+if [ ! -e "$config_file" ]; then
+  echo "Config file '$config_file' does not exist. Creating one..."
+
+  mkdir -p "$HOME/.config"
+  echo '{"vault_path": "'"$HOME/.config/datsvault"'", "terminal": "alacritty", "vault_repo": "null"}' > "$config_file"
+
+  # Prettify the config file
+  tmp=$(mktemp)
+  jq . "$config_file" > "$tmp"
+  mv "$tmp" "$config_file"
+
+  echo "Config file created. Please edit it and try again."
+  exit 0
+fi
+
+vault_path=$(jq -r '.vault_path' "$config_file")
+term_app=$(jq -r '.terminal' "$config_file")
+vault_repo=$(jq -r '.vault_repo' "$config_file")
+
+if [ ! -d "$vault_path" ]; then
+  if [ "$vault_repo" = "null" ]; then
+    echo "Vault path '$vault_path' does not exist. Please create it and try again."
+    exit 1
+  else
+    echo "Vault path '$vault_path' does not exist. Cloning the remote repository..."
+
+    mkdir -p "$vault_path"
+    git clone "$vault_repo" "$vault_path"
+
+    echo "Remote repository cloned."
+  fi
+fi
 
 case "$1" in
   -n)
