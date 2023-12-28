@@ -69,8 +69,35 @@ case "$1" in
     fi
     ;;
   -s)
-    pushd "$vault_path" && git add . && git commit -m "Update notes" && git push origin main && popd
-    echo "Vault updated and pushed to the remote repository."
+    pushd "$vault_path" || exit 1
+
+    git add .
+
+    if git diff --quiet --exit-code --cached && git diff --quiet --exit-code; then
+      echo "No changes to commit in the vault."
+    else
+      only_deletions=$(git diff --cached --name-status | grep '^D' | wc -l)
+      only_additions=$(git diff --cached --name-status | grep '^A' | wc -l)
+
+      staged_files=$(git diff --cached --name-only)
+
+      if [ "$only_deletions" -gt 0 ] && [ "$only_additions" -eq 0 ]; then
+        commit_msg="refactor: delete $only_deletions file(s)"
+      elif [ "$only_deletions" -eq 0 ] && [ "$only_additions" -gt 0 ]; then
+        commit_msg="feat: add $only_additions file(s)"
+      else
+        commit_msg="refactor: update $staged_files"
+      fi
+
+      git commit -m "$commit_msg"
+      
+      # Assuming you are pushing to the 'main' branch of the 'origin' remote
+      git push origin main
+
+      echo "Vault updated and pushed to the remote repository with commit message: $commit_msg"
+    fi
+
+    popd || exit 1
     ;;
   -u)
     pushd "$vault_path" && git pull origin main && popd
