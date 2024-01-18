@@ -13,7 +13,10 @@ fi
 function load_workspace() {
   if [ -f .curl-workspace.json ]; then
     export BASE_URL=$(jq -r .base_url .curl-workspace.json)
-    export HEADERS=$(jq -r '.headers | to_entries | .[] | "--header \(.key): \(.value)"' .curl-workspace.json)
+    export HEADERS=()
+    while IFS= read -r line; do
+      HEADERS+=("$line")
+    done < <(jq -r '.headers | to_entries | map("\(.key): \(.value)") | .[]' .curl-workspace.json)
   else
     echo "
       {\"base_url\": \"http://localhost:3000\", \"headers\": { \"Content-Type\": \"application/json\",\"Accept\": \"application/json\"}}
@@ -26,7 +29,19 @@ function load_workspace() {
 }
 
 function request() {
-  curl -s -X $1 $BASE_URL$2 $HEADERS
+  headers_with_flag=()
+
+  for header in "${HEADERS[@]}"; do
+    headers_with_flag+=("-H" "$header")
+  done
+
+  if [ "$3" == "" ]; then
+    curl -s -X $1 $BASE_URL$2 "${headers_with_flag[@]}"
+  else
+    data=$(jq -n --argjson data "$3" '$data' 2>/dev/null)
+
+    curl -s -X $1 $BASE_URL$2 "${headers_with_flag[@]}" -d "$data"
+  fi
 }
 
 function help() {
@@ -44,9 +59,9 @@ elif [ "$1" == "get" ]; then
 elif [ "$1" == "head" ]; then
   request HEAD $2
 elif [ "$1" == "post" ]; then
-  request POST $2 -d $3
+  request POST $2 $3
 elif [ "$1" == "put" ]; then
-  request PUT $2 -d $3
+  request PUT $2 $3
 elif [ "$1" == "delete" ]; then
   request DELETE $2
 else
