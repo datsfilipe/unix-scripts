@@ -1,11 +1,20 @@
 #!/bin/sh
 
-DIR=$PWD
+IS_RUNNING=$(pgrep -f "Shimeji" | wc -l)
 
-cd $HOME/.dotfiles/shells/shimeji/linux-shimeji
-direnv allow
+if [ $IS_RUNNING -gt 0 ]; then
+  pkill -f "Shimeji"
+else
+  DIR=$PWD
+  SHIMEJI_DIR=$HOME/.dotfiles/shells/shimeji/linux-shimeji
 
-# run the application
-sh ./launch.sh
+  cd $SHIMEJI_DIR
 
-cd $DIR
+  # Load the environment using direnv exec
+  direnv exec $SHIMEJI_DIR sh -c '
+    direnv allow
+    sh ./launch.sh
+  '
+
+  cd $DIR
+fi
