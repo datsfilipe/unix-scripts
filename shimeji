@@ -1,0 +1,11 @@
+#!/bin/sh
+
+DIR=$PWD
+
+cd $HOME/.dotfiles/shells/shimeji/linux-shimeji
+direnv allow
+
+# run the application
+sh ./launch.sh
+
+cd $DIR
