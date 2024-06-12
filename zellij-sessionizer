@@ -1,0 +1,23 @@
+#!/run/current-system/sw/bin/bash
+
+if [[ $# -eq 1 ]]; then
+  selected=$1
+else
+  selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/www/s/**/* ~/www/w/**/* | fzf)
+fi
+
+if [[ -z $selected ]]; then
+  exit 0
+fi
+
+session_name=$(basename "$selected" | tr . _)
+zellij_running=$(pgrep tmux)
+
+if [[ -z $ZELLIJ ]] && [[ -z $zellij_running ]]; then
+  cd $selected
+  zellij attach $session_name -c
+  exit 0
+fi
+
+zellij action write-chars "cd $selected" && zellij action write 10
+zellij action rename-session $session_name
