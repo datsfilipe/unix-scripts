@@ -11,7 +11,7 @@ if [[ -z $selected ]]; then
 fi
 
 session_name=$(basename "$selected" | tr . _)
-zellij_running=$(pgrep tmux)
+zellij_running=$(pgrep zellij)
 
 if [[ -z $ZELLIJ ]] && [[ -z $zellij_running ]]; then
   cd $selected
@@ -19,5 +19,5 @@ if [[ -z $ZELLIJ ]] && [[ -z $zellij_running ]]; then
   exit 0
 fi
 
-zellij action write-chars "cd $selected" && zellij action write 10
-zellij action rename-session $session_name
+cd $selected
+zellij attach $session_name -b
