@@ -2,35 +2,38 @@
 
 DIR="$HOME/.dotfiles/shells"
 
-if [ -z "$1" ]; then
-  echo "Please provide a shell"
-  exit 0
+if [ "$#" -lt 1 ]; then
+  echo "Please provide at least one shell"
+  exit 1
 fi
 
-if [ ! -d "$DIR/$1" ]; then
-  echo "Provided shell not found"
-  exit 0
-fi
-
-if [ ! -d "$DIR/$2" ]; then
-  echo "Second provided shell not found"
-  exit 0
-fi
+for shell in "$@"; do
+  if [ ! -d "$DIR/$shell" ]; then
+    echo "Provided shell '$shell' not found"
+    exit 1
+  fi
+done
 
 if [ -f ".envrc" ]; then
-  echo "envrc already exists"
-  exit 0
+  echo ".envrc already exists"
+  exit 1
 fi
 
-cp "$DIR/$1/.envrc" .
-line1="use flake $DIR/$1"
-sed -i "1s|.*|$line1|" .envrc
+content=""
+for shell in "$@"; do
+  content="${content}use flake $DIR/$shell\n"
+done
 
-if [ -f "$DIR/$2/.envrc" ]; then
-  tail -n +2 "$DIR/$2/.envrc" >> .envrc
-  line2="use flake $DIR/$2"
-  sed -i "2s|.*|$line2\n|" .envrc
-fi
+for shell in "$@"; do
+  if [ -f "$DIR/$shell/.envrc" ]; then
+    # Append the contents of the .envrc file excluding the first line
+    content="${content}$(tail -n +2 "$DIR/$shell/.envrc")\n"
+  fi
+done
+
+content=$(echo -e "$content" | sed '/^$/d')
+
+echo -e "$content" > .envrc
 
 direnv allow
 
@@ -39,5 +42,5 @@ echo "
 .direnv
 " >> .git/info/exclude
 
-echo "direnv is now configured with $1 shell"
-exit 1
+echo "direnv is now configured with shells: $*"
+exit 0
