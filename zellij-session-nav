@@ -1,5 +1,7 @@
 #!/run/current-system/sw/bin/bash
 
+plugin="file://$HOME/.dotfiles/dotfiles/zellij/plugins/zellij-switch.wasm"
+
 list_sessions() {
   if [ "$1" == "true" ]; then
     zellij ls | sed 's/\x1b\[[0-9;]*m//g' | awk '{print $1}'
@@ -30,7 +32,7 @@ if $HEADLESS_MODE; then
       echo "Already in session $SESSION_NUMBER ($session_name)"
       exit 0
     else
-      zellij pipe --plugin https://github.com/datsfilipe/zellij-switch/releases/download/v0.1.1/zellij-switch.wasm -- "$session_name"
+      zellij pipe --plugin $plugin -- "$session_name"
     fi
   else
     echo "Invalid session number: $SESSION_NUMBER"
@@ -40,7 +42,7 @@ else
   # Interactive mode with fzf
   session_name=$(echo "$sessions" | fzf)
   if [ -n "$session_name" ]; then
-    zellij pipe --plugin https://github.com/datsfilipe/zellij-switch/releases/download/v0.1.1/zellij-switch.wasm -- "$session_name"
+    zellij pipe --plugin $plugin -- "$session_name"
   else
     exit 0
   fi
