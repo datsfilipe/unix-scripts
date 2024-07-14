@@ -1,3 +1,111 @@
 #!/bin/sh
 
-mpv --shuffle --really-quiet --loop-playlist yes --no-video $1
+dir="$1"
+
+mp3_files=()
+
+readInput() {
+  IFS= read -rsn1 input
+  case $input in
+    n) play_next ;;
+    b) play_previous ;;
+    p) pause ;;
+    *)
+      if [ -z "$input" ]; then
+        continue
+      else
+        echo "Invalid input: $input"
+      fi
+      ;;
+  esac
+
+  read -rsn10000 -t 0.001
+}
+
+find_mp3_files() {
+  while IFS= read -r -d '' file; do
+    mp3_files+=("$file")
+  done < <(find "$dir" -type f -name "*.mp3" -print0)
+}
+
+play_next() {
+  if [ $((current_index + 1)) -lt ${#mp3_files[@]} ]; then
+    if [ -n "$mpv_pid" ]; then
+      kill $mpv_pid
+      wait $mpv_pid 2>/dev/null
+      mpv_pid=""
+    fi
+
+    echo -ne "\033[2K\r"
+
+    current_index=$((current_index + 1))
+    play_file "${mp3_files[current_index]}"
+  else
+    echo "No next song available. Exiting..."
+    exit 0
+  fi
+}
+
+play_previous() {
+  if [ $((current_index - 1)) -ge 0 ]; then
+    if [ -n "$mpv_pid" ]; then
+      kill $mpv_pid
+      wait $mpv_pid 2>/dev/null
+      mpv_pid=""
+    fi
+
+    echo -ne "\033[2K\r"
+
+    current_index=$((current_index - 1))
+    play_file "${mp3_files[current_index]}"
+  else
+    echo "Already at the beginning of the playlist."
+  fi
+}
+
+pause() {
+  echo 'cycle pause' | socat - /tmp/mpvsocket
+  echo -ne "\033[2K\r"
+}
+
+play_file() {
+  local file="$1"
+  basename=$(basename "$file")
+  echo "playing: $basename"
+  mpv --no-video --really-quiet --input-ipc-server=/tmp/mpvsocket "$file" &
+  mpv_pid=$!
+}
+
+cleanup() {
+  echo "exiting..."
+  pkill -P $$
+  exit 1
+}
+
+trap cleanup SIGINT SIGTERM
+
+if [ -z "$dir" ]; then
+  echo "Usage: $0 <directory>"
+  exit 1
+fi
+
+if [ ! -d "$dir" ]; then
+  echo "Directory '$dir' not found."
+  exit 1
+fi
+
+find_mp3_files
+
+if [ ${#mp3_files[@]} -eq 0 ]; then
+  echo "No .mp3 files found in '$dir'."
+  exit 1
+fi
+
+current_index=0
+if [[ current_index -lt ${#mp3_files[@]} ]]; then
+  play_file "${mp3_files[current_index]}"
+fi
+
+while true; do
+  readInput
+done
