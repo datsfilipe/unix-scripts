@@ -1,111 +1,60 @@
 #!/bin/sh
 
-dir="$1"
+if [ -z "$1" ]; then
+  echo "Usage: $0 <folder_path>"
+  exit 1
+fi
 
-mp3_files=()
+FOLDER_PATH="$1"
 
-readInput() {
-  IFS= read -rsn1 input
-  case $input in
-    n) play_next ;;
-    b) play_previous ;;
-    p) pause ;;
-    *)
-      if [ -z "$input" ]; then
-        continue
-      else
-        echo "Invalid input: $input"
-      fi
-      ;;
-  esac
+if ! command -v socat &> /dev/null || ! command -v mpv &> /dev/null; then
+  echo "socat and mpv are required to run this script."
+  exit 1
+fi
 
-  read -rsn10000 -t 0.001
-}
+MP3_FILES=("$FOLDER_PATH"/*.mp3)
 
-find_mp3_files() {
-  while IFS= read -r -d '' file; do
-    mp3_files+=("$file")
-  done < <(find "$dir" -type f -name "*.mp3" -print0)
-}
+if [ ${#MP3_FILES[@]} -eq 0 ]; then
+  echo "No .mp3 files found in the specified folder."
+  exit 1
+fi
 
-play_next() {
-  if [ $((current_index + 1)) -lt ${#mp3_files[@]} ]; then
-    if [ -n "$mpv_pid" ]; then
-      kill $mpv_pid
-      wait $mpv_pid 2>/dev/null
-      mpv_pid=""
-    fi
-
-    echo -ne "\033[2K\r"
-
-    current_index=$((current_index + 1))
-    play_file "${mp3_files[current_index]}"
-  else
-    echo "No next song available. Exiting..."
-    exit 0
-  fi
-}
-
-play_previous() {
-  if [ $((current_index - 1)) -ge 0 ]; then
-    if [ -n "$mpv_pid" ]; then
-      kill $mpv_pid
-      wait $mpv_pid 2>/dev/null
-      mpv_pid=""
-    fi
-
-    echo -ne "\033[2K\r"
-
-    current_index=$((current_index - 1))
-    play_file "${mp3_files[current_index]}"
-  else
-    echo "Already at the beginning of the playlist."
-  fi
-}
-
-pause() {
-  echo 'cycle pause' | socat - /tmp/mpvsocket
-  echo -ne "\033[2K\r"
-}
-
-play_file() {
-  local file="$1"
-  basename=$(basename "$file")
-  echo "playing: $basename"
-  mpv --no-video --really-quiet --input-ipc-server=/tmp/mpvsocket "$file" &
-  mpv_pid=$!
-}
+FIFO_PATH="/tmp/mpv_fifo_$$"
+mkfifo "$FIFO_PATH"
 
 cleanup() {
-  echo "exiting..."
-  pkill -P $$
-  exit 1
+  kill "$print_current_file_pid" 2>/dev/null
+  socat - "$FIFO_PATH" <<< '{"command":["quit"]}' >/dev/null 2>&1
+  rm -f "$FIFO_PATH"
+}
+trap cleanup EXIT
+
+mpv --input-ipc-server="$FIFO_PATH" --no-video --really-quiet "${MP3_FILES[@]}" &
+
+sleep 1
+
+print_current_file() {
+  CURRENT_FILE_INDEX=$(socat - "$FIFO_PATH" <<< '{"command":["get_property", "playlist-pos"]}' | jq -r '.data')
+
+  if [[ $CURRENT_FILE_INDEX =~ ^[0-9]+$ ]]; then
+    CURRENT_FILE="${MP3_FILES[$CURRENT_FILE_INDEX]}"
+    echo "Currently playing: $(basename "$CURRENT_FILE")"
+  else
+    echo "Error retrieving current file index: $CURRENT_FILE_INDEX" >&2
+  fi
 }
 
-trap cleanup SIGINT SIGTERM
-
-if [ -z "$dir" ]; then
-  echo "Usage: $0 <directory>"
-  exit 1
-fi
-
-if [ ! -d "$dir" ]; then
-  echo "Directory '$dir' not found."
-  exit 1
-fi
-
-find_mp3_files
-
-if [ ${#mp3_files[@]} -eq 0 ]; then
-  echo "No .mp3 files found in '$dir'."
-  exit 1
-fi
-
-current_index=0
-if [[ current_index -lt ${#mp3_files[@]} ]]; then
-  play_file "${mp3_files[current_index]}"
-fi
-
 while true; do
-  readInput
+  print_current_file
+  read -rsn1 input
+
+  case "$input" in
+    p) socat - "$FIFO_PATH" <<< '{"command":["cycle", "pause"]}' >/dev/null 2>&1 ;;
+    f) socat - "$FIFO_PATH" <<< '{"command":["seek", "5"]}' >/dev/null 2>&1 ;;
+    b) socat - "$FIFO_PATH" <<< '{"command":["seek", "-5"]}' >/dev/null 2>&1 ;;
+    n) socat - "$FIFO_PATH" <<< '{"command":["playlist-next"]}' >/dev/null 2>&1 ;;
+    N) socat - "$FIFO_PATH" <<< '{"command":["playlist-prev"]}' >/dev/null 2>&1 ;;
+    q) cleanup; exit ;;
+    *) echo "Invalid input: $input" ;;
+  esac
 done
