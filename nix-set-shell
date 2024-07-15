@@ -1,6 +1,6 @@
 #!/bin/sh
 
-DIR="$HOME/.dotfiles/shells"
+DIR="$HOME/.dotfiles/modules/shells"
 
 if [ "$#" -lt 1 ]; then
   echo "Please provide at least one shell"
