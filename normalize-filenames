@@ -28,17 +28,24 @@ normalize_filename() {
   fi
 }
 
+changed=false
+
 if [ $# -eq 0 ]; then
   IFS=$'\n'
   for file in $(git ls-files); do
     if [[ "$file" != LICENSE && "$file" != README* && "$file" == *.md ]]; then
-      normalize_filename "$file"
+      normalize_filename "$file" && changed=true
     fi
   done
 else
   for file in "$@"; do
     if [[ "$file" != LICENSE && "$file" != README* && "$file" == *.md ]]; then
-      normalize_filename "$file"
+      normalize_filename "$file" && changed=true
     fi
   done
+fi
+
+if [ "$changed" = true ]; then
+  echo "File names have been normalized. Please run 'git commit' again with the changes."
+  exit 1
 fi
