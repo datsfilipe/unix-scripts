@@ -1,5 +1,6 @@
 #!/bin/sh
 
+zellij_plugin="file://$HOME/.dotfiles/dotfiles/zellij/plugins/zellij-switch.wasm"
 config_file="$HOME/.config/datsvault.json"
 
 if [ ! -e "$config_file" ]; then
@@ -43,9 +44,16 @@ case "$1" in
     echo "title: \"$title\"" >> "$note_path"
     echo "---" >> "$note_path"
 
-    tmux new-session -d -s "$title" "nvim '$note_path'; tmux kill-session -t $title"
-    $term_app -e tmux attach-session -t "$title" >/dev/null 2>&1 &
-    disown
+    tmux_running=$(pgrep tmux)
+    zellij_running=$(pgrep zellij)
+
+    if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
+      zellij pipe --plugin "$zellij_plugin" -- "$title::$vault_path"
+    elif [[ -z $ZELLIJ ]] && [[ -z $zellij_running ]]; then
+      tmux new-session -d -s "$title" "nvim '$note_path'; tmux kill-session -t $title"
+      $term_app -e tmux attach-session -t "$title" >/dev/null 2>&1 &
+      disown
+    fi
     ;;
   -d)
     note="$2"
