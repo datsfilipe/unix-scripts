@@ -39,7 +39,6 @@ if $HEADLESS_MODE; then
     exit 1
   fi
 else
-  # Interactive mode with fzf
   session_name=$(echo "$sessions" | fzf)
   if [ -n "$session_name" ]; then
     zellij pipe --plugin $plugin -- "$session_name"
