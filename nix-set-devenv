@@ -1,6 +1,6 @@
 #!/bin/sh
 
-DIR="$HOME/.dotfiles/modules/shells"
+DIR="$DEV_ENVS_PATH"
 
 if [ "$#" -lt 1 ]; then
   echo "Please provide at least one shell"
@@ -26,7 +26,6 @@ done
 
 for shell in "$@"; do
   if [ -f "$DIR/$shell/.envrc" ]; then
-    # Append the contents of the .envrc file excluding the first line
     content="${content}$(tail -n +2 "$DIR/$shell/.envrc")\n"
   fi
 done
