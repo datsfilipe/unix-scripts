@@ -5,7 +5,7 @@ plugin="file://$HOME/.dotfiles/dotfiles/zellij/plugins/zellij-switch.wasm"
 if [[ $# -eq 1 ]]; then
   selected=$1
 else
-  selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/www/s/**/* ~/www/w/**/* | fzf)
+  selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/www/s/**/* ~/www/w/**/* | fzf --print-query)
 fi
 
 if [[ -z $selected ]]; then
@@ -13,6 +13,15 @@ if [[ -z $selected ]]; then
 fi
 
 session_name=$(basename "$selected" | tr . _)
+
+if [[ $session_name == $selected ]]; then
+  zoxide_path=$(zoxide query $session_name 2>&1)
+  if [[ $zoxide_path == *"no match found"* ]]; then
+    exit 0
+  fi
+  selected=$zoxide_path
+fi
+
 zellij_running=$(pgrep zellij)
 
 if [[ -z $ZELLIJ ]] && [[ -z $zellij_running ]]; then
