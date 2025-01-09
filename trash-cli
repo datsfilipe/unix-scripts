@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+trash() {
+  local trashDir="$PWD/.trash"
+  mkdir -p "$trashDir"
+  for var in "$@"; do
+    mv "$var" "$trashDir"
+  done
+}
+
+restore() {
+  local trashDir="$PWD/.trash"
+
+  if [ ! -d "$trashDir" ]; then
+    echo "nothing to restore"
+    return 1
+  fi
+
+  local files
+  files=("$trashDir"/*)
+
+  if [ "$1" == "--fzf" ]; then
+    if ! command -v fzf &>/dev/null; then
+      echo "fzf is not installed."
+      return 1
+    fi
+    local selection
+    selection=$(printf '%s\n' "${files[@]}" | fzf)
+    [ -n "$selection" ] && mv "$selection" . && cleanup_trash "$trashDir"
+  elif [[ "$1" == "--restore" && -n "$2" ]]; then
+    local id="$2"
+    if (( id < 0 || id >= ${#files[@]} )); then
+      echo "invalid ID: $id"
+      return 1
+    fi
+    mv "${files[$id]}" .
+    cleanup_trash "$trashDir"
+  else
+    local id=0
+    for file in "${files[@]}"; do
+      echo "$id .. $file"
+      ((id++))
+    done | less
+  fi
+}
+
+cleanup_trash() {
+  find "$PWD" -maxdepth 1 -type d \( -name ".trash" -o -name ".Trash" \) -exec $(which rm) -rf {} +
+}
+
+cleanup_all_trash() {
+  find / -type d \( -name ".trash" -o -name ".Trash" \) -exec $(which rm) -rf {} + 2>/dev/null || true
+}
+
+case "$1" in
+  --* | -*)
+    case "$1" in
+      "--list" | "-l")
+        restore
+        ;;
+      "--fzf" | "-f")
+        restore --fzf
+        ;;
+      "--restore" | "-r")
+        restore --restore "$2"
+        ;;
+      "--cleanup" | "-c")
+        cleanup_trash
+        ;;
+      "--cleanup-all" | "-ca")
+        cleanup_all_trash
+        ;;
+      "--help" | "-h")
+        echo "usage: $0 [OPTIONS]"
+        echo ""
+        echo "OPTIONS:"
+        echo "  --fzf: interactively select files to restore"
+        echo "  --restore: restore a file by ID"
+        echo "  --cleanup: cleanup trash directory"
+        echo "  --cleanup-all: cleanup all trash directories"
+        echo "  no options: trash files"
+        exit 0
+        ;;
+      *)
+        echo "unknown option: $1"
+        echo "usage: $0 [OPTIONS]"
+        exit 1
+        ;;
+    esac
+    ;;
+  * )
+    trash "$@"
+    ;;
+esac
