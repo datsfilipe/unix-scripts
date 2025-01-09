@@ -1,6 +1,11 @@
 #!/run/current-system/sw/bin/bash
 
-plugin="file://$HOME/.dotfiles/dotfiles/zellij/plugins/zellij-switch.wasm"
+if [[ -z $ZELLIJ_SWITCH_PATH ]]; then
+  echo "ZELLIJ_SWITCH_PATH is not set"
+  exit 1
+fi
+
+plugin="file://$ZELLIJ_SWITCH_PATH"
 
 list_sessions() {
   if [ "$1" == "true" ]; then
