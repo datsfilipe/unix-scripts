@@ -18,23 +18,11 @@ if [[ -z $plugin ]]; then
   exit 1
 fi
 
-selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/www/s/**/* ~/www/w/**/* | fzf --print-query)
+selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/www/s/**/* ~/www/w/**/* | fzf)
 session_name=$(basename "$selected" | tr . _)
-zoxide_path=$(zoxide query $session_name 2>&1)
 
-function dir_exists() {
-  if [[ -d $1 ]]; then
-    echo 1
-  else
-    echo 0
-  fi
-}
-
-if [[ $(dir_exists $selected) == 1 ]]; then
-  if [[ $zoxide_path == *"no match found"* ]]; then
-    exit 0
-  fi
-  selected=$zoxide_path
+if [[ -d $1 ]]; then
+  exit 0
 fi
 
 zellij_running=$(pgrep zellij)
