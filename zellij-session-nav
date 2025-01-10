@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-plugin=""
+plugin="file://$ZELLIJ_SWITCH_PATH"
 mode=""
 session_number=0
 
@@ -26,11 +26,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 if [[ -z $plugin ]]; then
-  if [[ -z $ZELLIJ_SWITCH_PATH ]]; then
-    echo "ZELLIJ_SWITCH_PATH is not set"
-    exit 1
-  fi
-  plugin="file://$ZELLIJ_SWITCH_PATH"
+  echo "no plugin specified"
 fi
 
 sessions=$(list_sessions "$HEADLESS_MODE")
