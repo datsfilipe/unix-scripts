@@ -1,35 +1,36 @@
 #!/usr/bin/env bash
 
-plugin=""
+plugin="file://$ZELLIJ_SWITCH_PATH"
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     --plugin) plugin="file://$2"; shift ;;
-    *) selected=$1 ;;
+    *) 
+      echo "unexpected argument: $1" >&2
+      exit 1
+      ;;
   esac
   shift
 done
 
 if [[ -z $plugin ]]; then
-  if [[ -z $ZELLIJ_SWITCH_PATH ]]; then
-    echo "ZELLIJ_SWITCH_PATH is not set"
-    exit 1
-  fi
-  plugin="file://$ZELLIJ_SWITCH_PATH"
+  echo "plugin not specified" >&2
+  exit 1
 fi
 
-if [[ -z $selected ]]; then
-  selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/www/s/**/* ~/www/w/**/* | fzf --print-query)
-fi
-
-if [[ -z $selected ]]; then
-  exit 0
-fi
-
+selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/www/s/**/* ~/www/w/**/* | fzf --print-query)
 session_name=$(basename "$selected" | tr . _)
+zoxide_path=$(zoxide query $session_name 2>&1)
 
-if [[ $session_name == $selected ]]; then
-  zoxide_path=$(zoxide query $session_name 2>&1)
+function dir_exists() {
+  if [[ -d $1 ]]; then
+    echo 1
+  else
+    echo 0
+  fi
+}
+
+if [[ $(dir_exists $selected) == 1 ]]; then
   if [[ $zoxide_path == *"no match found"* ]]; then
     exit 0
   fi
@@ -44,4 +45,4 @@ if [[ -z $ZELLIJ ]] && [[ -z $zellij_running ]]; then
   exit 0
 fi
 
-zellij pipe --plugin $plugin -- "--session $session_name --cwd $selected"
+zellij pipe --plugin $plugin -- "-s $session_name -c $selected"
