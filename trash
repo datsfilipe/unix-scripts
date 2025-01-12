@@ -45,7 +45,7 @@ restore() {
 }
 
 cleanup_trash() {
-  find / -type d \( -name ".trash" -o -name ".Trash" \) -exec $(which rm) -rf {} + 2>/dev/null || true
+  fd -H -I -t d '^\.Trash$|^\.trash$' "$HOME" | xargs -r rm -rf 2>/dev/null || true
 }
 
 case "$1" in
