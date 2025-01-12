@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 
 trash() {
-  local trashDir="$PWD/.trash"
-  mkdir -p "$trashDir"
   for var in "$@"; do
+    local dirName=$(dirname "$var")
+    local trashDir="$dirName/.trash"
+    if [ ! -d "$trashDir" ]; then
+      mkdir -p "$trashDir"
+    fi
+
     mv "$var" "$trashDir"
   done
 }
@@ -46,6 +50,11 @@ restore() {
 
 cleanup_trash() {
   fd -H -I -t d '^\.Trash$|^\.trash$' "$HOME" | xargs -r rm -rf 2>/dev/null || true
+
+  local mount_points=("/media/$USER" "/run/media/$USER" "/mnt" "/Volumes")
+  for mount in "${mount_points[@]}"; do
+    [[ -d "$mount" ]] && fd -H -I -t d '^\.Trash$|^\.trash$' "$mount" | xargs -r rm -rf 2>/dev/null || true
+  done
 }
 
 case "$1" in
