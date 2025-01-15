@@ -36,7 +36,7 @@ decode_path() {
   local original_path="$2"
   local base_name depth last_dir count
   encoded_file="${encoded_file%#*}"
-  IFS='_' read base_name depth last_dir <<< "$encoded_file"
+  IFS='_' read -r base_name depth last_dir <<< "$encoded_file"
   
   if [[ "$depth" == "0" ]]; then
     echo "${original_path%/}/$base_name"
