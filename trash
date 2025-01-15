@@ -14,6 +14,8 @@ encode_path() {
   local base_name=$(basename "$file")
   local dir_path=$(dirname "$(realpath "$file")")
   local path_segments=(${dir_path//\// })
+  local trash_root=$(get_trash_root "$file")
+  local count=0
   local encoded=""
   
   if [[ ${#path_segments[@]} -gt 1 ]]; then
@@ -21,14 +23,20 @@ encode_path() {
   else
     encoded="${base_name}_0"
   fi
-  echo "$encoded"
+
+  while [[ -e "$trash_root/${encoded}#${count}" ]]; do
+    ((count++))
+  done
+  
+  echo "${encoded}#${count}"
 }
 
 decode_path() {
   local encoded_file="$1"
   local original_path="$2"
-  local base_name depth last_dir
-  IFS='_' read -r base_name depth last_dir <<< "$encoded_file"
+  local base_name depth last_dir count
+  encoded_file="${encoded_file%#*}"
+  IFS='_' read base_name depth last_dir <<< "$encoded_file"
   
   if [[ "$depth" == "0" ]]; then
     echo "${original_path%/}/$base_name"
@@ -48,6 +56,14 @@ decode_path() {
     restored_path="${restored_path#/}"
     echo "/${restored_path}/$last_dir/$base_name"
   fi
+}
+
+get_original_name() {
+  local encoded_file="$1"
+  local base_name
+  encoded_file="${encoded_file%#*}"
+  IFS='_' read -r base_name _ _ <<< "$encoded_file"
+  echo "$base_name"
 }
 
 trash() {
@@ -75,9 +91,10 @@ restore() {
       local selection=$(
         for f in "${files[@]}"; do
           local base_name=$(basename "$f")
-          local original_name=$(echo "$base_name" | cut -d'_' -f1)
+          local original_name=$(get_original_name "$base_name")
+          local count="${base_name##*#}"
           local target_path=$(decode_path "$base_name" "$PWD")
-          echo "$base_name | Original: $original_name -> $target_path"
+          echo "$base_name | Original: $original_name (version $count) -> $target_path"
         done | fzf | cut -d'|' -f1 | xargs
       )
       [[ -n "$selection" ]] && {
@@ -94,9 +111,10 @@ restore() {
       local i=0
       for f in "${files[@]}"; do
         local base_name=$(basename "$f")
-        local original_name=$(echo "$base_name" | cut -d'_' -f1)
+        local original_name=$(get_original_name "$base_name")
+        local count="${base_name##*#}"
         local target_path=$(decode_path "$base_name" "$PWD")
-        echo "$i: $original_name -> $target_path"
+        echo "$i: $original_name (version $count) -> $target_path"
         ((i++))
       done
       ;;
