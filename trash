@@ -1,95 +1,153 @@
 #!/usr/bin/env bash
 
-trash() {
-  for var in "$@"; do
-    local dirName=$(dirname "$var")
-    local trashDir="$dirName/.trash"
-    if [ ! -d "$trashDir" ]; then
-      mkdir -p "$trashDir"
-    fi
+get_trash_root() {
+  local path="$1"
+  if [[ "$path" =~ ^/media/$USER|^/run/media/$USER|^/mnt|^/Volumes ]]; then
+    echo "$(df -P "$path" | tail -1 | awk '{print $NF}')/.trash"
+  else
+    echo "$HOME/.trash"
+  fi
+}
 
-    mv "$var" "$trashDir"
+encode_path() {
+  local file="$1"
+  local base_name=$(basename "$file")
+  local dir_path=$(dirname "$(realpath "$file")")
+  local path_segments=(${dir_path//\// })
+  local encoded=""
+  
+  if [[ ${#path_segments[@]} -gt 1 ]]; then
+    encoded="${base_name}_${#path_segments[@]}_${path_segments[-1]}"
+  else
+    encoded="${base_name}_0"
+  fi
+  echo "$encoded"
+}
+
+decode_path() {
+  local encoded_file="$1"
+  local original_path="$2"
+  local base_name depth last_dir
+  IFS='_' read -r base_name depth last_dir <<< "$encoded_file"
+  
+  if [[ "$depth" == "0" ]]; then
+    echo "${original_path%/}/$base_name"
+  else
+    local path_parts=()
+    local current="${original_path%/}"
+    while [[ "$current" != "/" ]]; do
+      path_parts=("$(basename "$current")" "${path_parts[@]}")
+      current="$(dirname "$current")"
+    done
+    
+    local target_depth=$((depth - 1))
+    local restored_path=""
+    for ((i = 0; i < target_depth; i++)); do
+      restored_path="$restored_path/${path_parts[i]}"
+    done
+    restored_path="${restored_path#/}"
+    echo "/${restored_path}/$last_dir/$base_name"
+  fi
+}
+
+trash() {
+  for file in "$@"; do
+    [[ ! -e "$file" ]] && { echo "File not found: $file"; continue; }
+    
+    local trash_root=$(get_trash_root "$file")
+    [[ ! -d "$trash_root" ]] && mkdir -p "$trash_root"
+    
+    local encoded_name=$(encode_path "$file")
+    mv "$file" "$trash_root/$encoded_name"
   done
 }
 
 restore() {
-  local trashDir="$PWD/.trash"
-
-  if [ ! -d "$trashDir" ]; then
-    echo "nothing to restore"
-    return 1
-  fi
-
-  local files
-  files=("$trashDir"/*)
-
-  if [ "$1" == "--fzf" ]; then
-    if ! command -v fzf &>/dev/null; then
-      echo "fzf is not installed."
+  local trash_root=$(get_trash_root "$PWD")
+  [[ ! -d "$trash_root" ]] && { echo "No trash directory found"; return 1; }
+  
+  case "$1" in
+    "--fzf")
+      command -v fzf >/dev/null 2>&1 || { echo "fzf not installed"; return 1; }
+      local files=("$trash_root"/*)
+      [[ ! -e "${files[0]}" ]] && { echo "Trash is empty"; return 1; }
+      
+      local selection=$(
+        for f in "${files[@]}"; do
+          local base_name=$(basename "$f")
+          local original_name=$(echo "$base_name" | cut -d'_' -f1)
+          local target_path=$(decode_path "$base_name" "$PWD")
+          echo "$base_name | Original: $original_name -> $target_path"
+        done | fzf | cut -d'|' -f1 | xargs
+      )
+      [[ -n "$selection" ]] && {
+        local target_path=$(decode_path "$selection" "$PWD")
+        local target_dir=$(dirname "$target_path")
+        mkdir -p "$target_dir"
+        mv "$trash_root/$selection" "$target_path"
+      }
+      ;;
+    "--list")
+      local files=("$trash_root"/*)
+      [[ ! -e "${files[0]}" ]] && { echo "Trash is empty"; return 1; }
+      
+      local i=0
+      for f in "${files[@]}"; do
+        local base_name=$(basename "$f")
+        local original_name=$(echo "$base_name" | cut -d'_' -f1)
+        local target_path=$(decode_path "$base_name" "$PWD")
+        echo "$i: $original_name -> $target_path"
+        ((i++))
+      done
+      ;;
+    "--restore")
+      local id="$2"
+      local files=("$trash_root"/*)
+      [[ ! -e "${files[0]}" ]] && { echo "Trash is empty"; return 1; }
+      [[ -z "$id" ]] && { echo "Please provide an ID"; return 1; }
+      
+      local file="${files[$id]}"
+      [[ ! -e "$file" ]] && { echo "Invalid ID: $id"; return 1; }
+      
+      local target_path=$(decode_path "$(basename "$file")" "$PWD")
+      local target_dir=$(dirname "$target_path")
+      mkdir -p "$target_dir"
+      mv "$file" "$target_path"
+      ;;
+    *)
+      echo "Usage: $0 [--fzf|--list|--restore ID]"
       return 1
-    fi
-    local selection
-    selection=$(printf '%s\n' "${files[@]}" | fzf)
-    [ -n "$selection" ] && mv "$selection" . && cleanup_trash "$trashDir"
-  elif [[ "$1" == "--restore" && -n "$2" ]]; then
-    local id="$2"
-    if (( id < 0 || id >= ${#files[@]} )); then
-      echo "invalid ID: $id"
-      return 1
-    fi
-    mv "${files[$id]}" .
-    cleanup_trash "$trashDir"
-  else
-    local id=0
-    for file in "${files[@]}"; do
-      echo "$id .. $file"
-      ((id++))
-    done | less
-  fi
+      ;;
+  esac
 }
 
 cleanup_trash() {
-  fd -H -I -t d '^\.Trash$|^\.trash$' "$HOME" | xargs -r rm -rf 2>/dev/null || true
-
-  local mount_points=("/media/$USER" "/run/media/$USER" "/mnt" "/Volumes")
-  for mount in "${mount_points[@]}"; do
-    [[ -d "$mount" ]] && fd -H -I -t d '^\.Trash$|^\.trash$' "$mount" | xargs -r rm -rf 2>/dev/null || true
+  local trash_roots=(
+    "$HOME/.trash"
+    "/media/$USER/.trash"
+    "/run/media/$USER/.trash"
+    "/mnt/.trash"
+    "/Volumes/.trash"
+  )
+  
+  for root in "${trash_roots[@]}"; do
+    [[ -d "$root" ]] && rm -rf "$root"
   done
 }
 
 case "$1" in
-  --* | -*)
-    case "$1" in
-      "--list" | "-l")
-        restore
-        ;;
-      "--fzf" | "-f")
-        restore --fzf
-        ;;
-      "--restore" | "-r")
-        restore --restore "$2"
-        ;;
-      "--cleanup" | "-c")
-        cleanup_trash
-        ;;
-      "--help" | "-h")
-        echo "usage: $0 [OPTIONS]"
-        echo ""
-        echo "OPTIONS:"
-        echo "  --fzf: interactively select files to restore"
-        echo "  --restore: restore a file by ID"
-        echo "  --cleanup: cleanup trash directory"
-        echo "  no options: trash files"
-        exit 0
-        ;;
-      *)
-        echo "unknown option: $1"
-        echo "usage: $0 [OPTIONS]"
-        exit 1
-        ;;
-    esac
+  "--fzf"|"-f") restore --fzf ;;
+  "--list"|"-l") restore --list ;;
+  "--restore"|"-r") restore --restore "$2" ;;
+  "--cleanup"|"-c") cleanup_trash ;;
+  "--help"|"-h")
+    echo "Usage: $(basename "$0") [OPTIONS] [FILES]"
+    echo "Options:"
+    echo "  --fzf, -f        : Restore files using fzf"
+    echo "  --list, -l       : List files in trash"
+    echo "  --restore, -r ID : Restore file by ID"
+    echo "  --cleanup, -c    : Empty all trash directories"
+    echo "  --help, -h       : Show this help"
     ;;
-  * )
-    trash "$@"
-    ;;
+  *) trash "$@" ;;
 esac
