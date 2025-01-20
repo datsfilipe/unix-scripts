@@ -13,13 +13,25 @@ if [ -z "$WAYLAND_DISPLAY" ]; then
     notify-send -t 2000 "Keyboard layout" "Switched to default"
   fi
 else
-  if [ "$variant" = "intl" ]; then
-    hyprctl keyword input:kb_variant intl
+  if [ "$SWAY_SOCKET" ]; then
+    if [ "$variant" = "intl" ]; then
+      swaymsg input type:keyboard xkb_variant intl
 
-    notify-send -t 2000 "Keyboard layout" "Switched to international"
+      notify-send -t 2000 "Keyboard layout" "Switched to international"
+    else
+      swaymsg input type:keyboard xkb_variant '""'
+
+      notify-send -t 2000 "Keyboard layout" "Switched to default"
+    fi
   else
-    hyprctl reload
+    if [ "$variant" = "intl" ]; then
+      hyprctl keyword input:kb_variant intl
 
-    notify-send -t 2000 "Keyboard layout" "Switched to default"
+      notify-send -t 2000 "Keyboard layout" "Switched to international"
+    else
+      hyprctl reload
+
+      notify-send -t 2000 "Keyboard layout" "Switched to default"
+    fi
   fi
 fi
