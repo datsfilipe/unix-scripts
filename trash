@@ -11,19 +11,13 @@ get_trash_root() {
 
 encode_path() {
   local file="$1"
-  local base_name=$(basename "$file")
-  local dir_path=$(dirname "$(realpath "$file")")
-  local path_segments=(${dir_path//\// })
+  local abs_path=$(realpath "$file")
+  local base_name=$(basename "$abs_path")
+  local dir_path=$(dirname "$abs_path")
+  local encoded="${base_name}__$(echo "$dir_path" | base64 -w 0)"
   local trash_root=$(get_trash_root "$file")
   local count=0
-  local encoded=""
   
-  if [[ ${#path_segments[@]} -gt 1 ]]; then
-    encoded="${base_name}_${#path_segments[@]}_${path_segments[-1]}"
-  else
-    encoded="${base_name}_0"
-  fi
-
   while [[ -e "$trash_root/${encoded}#${count}" ]]; do
     ((count++))
   done
@@ -33,37 +27,16 @@ encode_path() {
 
 decode_path() {
   local encoded_file="$1"
-  local original_path="$2"
-  local base_name depth last_dir count
   encoded_file="${encoded_file%#*}"
-  IFS='_' read -r base_name depth last_dir <<< "$encoded_file"
-  
-  if [[ "$depth" == "0" ]]; then
-    echo "${original_path%/}/$base_name"
-  else
-    local path_parts=()
-    local current="${original_path%/}"
-    while [[ "$current" != "/" ]]; do
-      path_parts=("$(basename "$current")" "${path_parts[@]}")
-      current="$(dirname "$current")"
-    done
-    
-    local target_depth=$((depth - 1))
-    local restored_path=""
-    for ((i = 0; i < target_depth; i++)); do
-      restored_path="$restored_path/${path_parts[i]}"
-    done
-    restored_path="${restored_path#/}"
-    echo "/${restored_path}/$last_dir/$base_name"
-  fi
+  local base_name="${encoded_file%%__*}"
+  local encoded_path="${encoded_file#*__}"
+  local dir_path=$(echo "$encoded_path" | base64 -d)
+  echo "${dir_path}/${base_name}"
 }
 
 get_original_name() {
   local encoded_file="$1"
-  local base_name
-  encoded_file="${encoded_file%#*}"
-  IFS='_' read -r base_name _ _ <<< "$encoded_file"
-  echo "$base_name"
+  echo "${encoded_file%%__*}"
 }
 
 trash() {
@@ -79,77 +52,94 @@ trash() {
 }
 
 restore() {
-  local trash_root=$(get_trash_root "$PWD")
-  [[ ! -d "$trash_root" ]] && { echo "No trash directory found"; return 1; }
+  local trash_root current_file target_path target_dir
   
   case "$1" in
     "--fzf")
       command -v fzf >/dev/null 2>&1 || { echo "fzf not installed"; return 1; }
-      local files=("$trash_root"/*)
-      [[ ! -e "${files[0]}" ]] && { echo "Trash is empty"; return 1; }
+      
+      local trash_dirs=("$HOME/.trash")
+      for mount in /media/$USER/* /run/media/$USER/* /mnt/* /Volumes/*; do
+        [[ -d "$mount/.trash" ]] && trash_dirs+=("$mount/.trash")
+      done
+      
+      local files=()
+      for dir in "${trash_dirs[@]}"; do
+        [[ -d "$dir" ]] && files+=("$dir"/*)
+      done
+      [[ ${#files[@]} -eq 0 ]] && { echo "No files in trash"; return 1; }
       
       local selection=$(
         for f in "${files[@]}"; do
+          [[ ! -e "$f" ]] && continue
           local base_name=$(basename "$f")
           local original_name=$(get_original_name "$base_name")
           local count="${base_name##*#}"
-          local target_path=$(decode_path "$base_name" "$PWD")
-          echo "$base_name | Original: $original_name (version $count) -> $target_path"
+          local target_path=$(decode_path "$base_name")
+          echo "$f | Original: $original_name (version $count) -> $target_path"
         done | fzf | cut -d'|' -f1 | xargs
       )
+      
       [[ -n "$selection" ]] && {
-        local target_path=$(decode_path "$selection" "$PWD")
-        local target_dir=$(dirname "$target_path")
+        current_file="$selection"
+        target_path=$(decode_path "$(basename "$current_file")")
+        target_dir=$(dirname "$target_path")
         mkdir -p "$target_dir"
-        mv "$trash_root/$selection" "$target_path"
+        mv "$current_file" "$target_path"
+        echo "Restored to: $target_path"
       }
       ;;
     "--list")
-      local files=("$trash_root"/*)
-      [[ ! -e "${files[0]}" ]] && { echo "Trash is empty"; return 1; }
+      local trash_dirs=("$HOME/.trash")
+      for mount in /media/$USER/* /run/media/$USER/* /mnt/* /Volumes/*; do
+        [[ -d "$mount/.trash" ]] && trash_dirs+=("$mount/.trash")
+      done
       
       local i=0
-      for f in "${files[@]}"; do
-        local base_name=$(basename "$f")
-        local original_name=$(get_original_name "$base_name")
-        local count="${base_name##*#}"
-        local target_path=$(decode_path "$base_name" "$PWD")
-        echo "$i: $original_name (version $count) -> $target_path"
-        ((i++))
+      for dir in "${trash_dirs[@]}"; do
+        [[ ! -d "$dir" ]] && continue
+        for f in "$dir"/*; do
+          [[ ! -e "$f" ]] && continue
+          local base_name=$(basename "$f")
+          local original_name=$(get_original_name "$base_name")
+          local count="${base_name##*#}"
+          local target_path=$(decode_path "$base_name")
+          echo "$i: $original_name (version $count) -> $target_path"
+          files[$i]="$f"
+          ((i++))
+        done
       done
+      [[ $i -eq 0 ]] && echo "No files in trash"
       ;;
     "--restore")
       local id="$2"
-      local files=("$trash_root"/*)
-      [[ ! -e "${files[0]}" ]] && { echo "Trash is empty"; return 1; }
       [[ -z "$id" ]] && { echo "Please provide an ID"; return 1; }
       
-      local file="${files[$id]}"
-      [[ ! -e "$file" ]] && { echo "Invalid ID: $id"; return 1; }
+      restore --list >/dev/null
+      [[ ! -e "${files[$id]}" ]] && { echo "Invalid ID: $id"; return 1; }
       
-      local target_path=$(decode_path "$(basename "$file")" "$PWD")
-      local target_dir=$(dirname "$target_path")
+      current_file="${files[$id]}"
+      target_path=$(decode_path "$(basename "$current_file")")
+      target_dir=$(dirname "$target_path")
       mkdir -p "$target_dir"
-      mv "$file" "$target_path"
+      mv "$current_file" "$target_path"
+      echo "Restored to: $target_path"
       ;;
     *)
-      echo "Usage: $0 [--fzf|--list|--restore ID]"
+      echo "Usage: restore [--fzf|--list|--restore ID]"
       return 1
       ;;
   esac
 }
 
 cleanup_trash() {
-  local trash_roots=(
-    "$HOME/.trash"
-    "/media/$USER/.trash"
-    "/run/media/$USER/.trash"
-    "/mnt/.trash"
-    "/Volumes/.trash"
-  )
+  local trash_dirs=("$HOME/.trash")
+  for mount in /media/$USER/* /run/media/$USER/* /mnt/* /Volumes/*; do
+    [[ -d "$mount/.trash" ]] && trash_dirs+=("$mount/.trash")
+  done
   
-  for root in "${trash_roots[@]}"; do
-    [[ -d "$root" ]] && rm -rf "$root"
+  for dir in "${trash_dirs[@]}"; do
+    [[ -d "$dir" ]] && rm -rf "$dir"
   done
 }
 
