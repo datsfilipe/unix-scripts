@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ $# -lt 1 ]; then
+  echo "Usage: $0 /path/to/image.jpg [--output-MONITOR=\"width height x_pos y_pos rotation\"]"
+  echo "Example: $0 wallpaper.jpg --output-DP-1=\"1920 1080 0 400 normal\" --output-HDMI-A-1=\"1080 1920 1920 0 left\""
+  exit 1
+fi
+
+INPUT_IMAGE="$1"
+shift
+
+OUTPUT_DIR="/tmp/wallpapers"
+mkdir -p "$OUTPUT_DIR"
+
+declare -A monitors
+
+if [ $# -eq 0 ]; then
+  monitors["DP-1"]="1920 1080 0 400 normal"
+  monitors["HDMI-A-1"]="1080 1920 1920 0 left"
+else
+  for arg in "$@"; do
+    if [[ $arg == --output-* ]]; then
+      monitor_arg="${arg#--output-}"
+      monitor_name="${monitor_arg%%=*}"
+      monitor_config="${monitor_arg#*=}"
+      monitor_config="${monitor_config//\"/}"
+      
+      monitors["$monitor_name"]="$monitor_config"
+    fi
+  done
+fi
+
+if [ ${#monitors[@]} -eq 0 ]; then
+  echo "No monitor configurations provided!"
+  exit 1
+fi
+
+max_x=0
+max_y=0
+
+for monitor in "${!monitors[@]}"; do
+  params=(${monitors[$monitor]})
+  width=${params[0]}
+  height=${params[1]}
+  x_pos=${params[2]}
+  y_pos=${params[3]}
+  right_edge=$((x_pos + width))
+  bottom_edge=$((y_pos + height))
+  
+  if [ $right_edge -gt $max_x ]; then
+    max_x=$right_edge
+  fi
+  
+  if [ $bottom_edge -gt $max_y ]; then
+    max_y=$bottom_edge
+  fi
+done
+
+echo "Virtual desktop size: ${max_x}x${max_y}"
+echo "Resizing input image to match virtual desktop..."
+RESIZED_IMAGE="${OUTPUT_DIR}/resized_wallpaper.png"
+magick "$INPUT_IMAGE" -resize ${max_x}x${max_y}^ -gravity center -extent ${max_x}x${max_y} "$RESIZED_IMAGE"
+
+echo "Cropping for each monitor..."
+for monitor in "${!monitors[@]}"; do
+  params=(${monitors[$monitor]})
+  width=${params[0]}
+  height=${params[1]}
+  x_pos=${params[2]}
+  y_pos=${params[3]}
+  rotation=${params[4]}
+  
+  OUTPUT_FILE="${OUTPUT_DIR}/${monitor}.png"
+  
+  echo "Processing $monitor: ${width}x${height} at position ${x_pos},${y_pos} rotation ${rotation}"
+  magick "$RESIZED_IMAGE" -crop ${width}x${height}+${x_pos}+${y_pos} "$OUTPUT_FILE"
+  
+  echo "Setting wallpaper for $monitor"
+  swaybg -o "$monitor" -i "$OUTPUT_FILE" -m fill &
+done
+
+echo "Wallpaper set successfully!"
