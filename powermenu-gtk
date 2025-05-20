@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+choice=$(
+  yad \
+    --undecorated \
+    --on-top \
+    --skip-taskbar \
+    --fixed \
+    --width=200 \
+    --height=80 \
+    --geometry=200x80+center \
+    --text-align=center \
+    --buttons-layout=center \
+    --text="電源メニュー" \
+    --button="reboot":0 \
+    --button="poweroff":1 \
+    --button="suspend":2 \
+    --button="logout":3
+)
+
+case $? in
+  0) exec systemctl reboot   ;;
+  1) exec systemctl poweroff ;;
+  2) exec systemctl suspend  ;;
+  3) niri msg action quit -s ;;
+  *) exit 1                  ;;
+esac
