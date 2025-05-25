@@ -1,6 +1,6 @@
 #!/bin/sh
 
-win_boot=$(sudo efibootmgr | grep Windows | awk '{print $1}' | sed 's/Boot//' | tr -cd '[:digit:]' | sed 's/^0*//')
+win_boot=$(sudo efibootmgr | grep "Windows Boot Manager" | sed -E 's/^Boot0*([0-9]+)\*.*/\1/')
 
 sudo efibootmgr -n $win_boot
 
