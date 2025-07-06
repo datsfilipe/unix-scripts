@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+CLIP_PIPE="$HOME/.local/share/clipboard/clip"
+
+is_ssh_session() {
+    [[ -n "$SSH_CLIENT" || -n "$SSH_TTY" || -n "$SSH_CONNECTION" ]]
+}
+
+get_display_server() {
+    if [[ -n "$WAYLAND_DISPLAY" ]]; then
+        echo "wayland"
+    elif [[ -n "$DISPLAY" ]]; then
+        echo "xorg"
+    else
+        echo "unknown"
+    fi
+}
+
+copy_to_clipboard() {
+    local text="$1"
+    
+    if is_ssh_session; then
+        if [[ -p "$CLIP_PIPE" ]]; then
+            echo "$text" > "$CLIP_PIPE"
+        else
+            echo "Error: Named pipe $CLIP_PIPE not found" >&2
+            return 1
+        fi
+    else
+        local display_server=$(get_display_server)
+        case "$display_server" in
+            "wayland")
+                echo "$text" | wl-copy
+                ;;
+            "xorg")
+                echo "$text" | xclip -selection clipboard
+                ;;
+            *)
+                echo "Error: Unknown display server" >&2
+                return 1
+                ;;
+        esac
+    fi
+}
+
+paste_from_clipboard() {
+    if is_ssh_session; then
+        if [[ -p "$CLIP_PIPE" ]]; then
+            cat "$CLIP_PIPE"
+        else
+            echo "Error: Named pipe $CLIP_PIPE not found" >&2
+            return 1
+        fi
+    else
+        local display_server=$(get_display_server)
+        case "$display_server" in
+            "wayland")
+                wl-paste
+                ;;
+            "xorg")
+                xclip -selection clipboard -o
+                ;;
+            *)
+                echo "Error: Unknown display server" >&2
+                return 1
+                ;;
+        esac
+    fi
+}
+
+case "$1" in
+    "copy")
+        if [[ -n "$2" ]]; then
+            copy_to_clipboard "$2"
+        else
+            copy_to_clipboard "$(cat)"
+        fi
+        ;;
+    "paste")
+        paste_from_clipboard
+        ;;
+    *)
+        echo "Usage: $0 [copy|paste] [text]"
+        echo "  copy: Copy text to clipboard (reads from stdin if no text provided)"
+        echo "  paste: Paste text from clipboard"
+        echo ""
+        echo "Context detection:"
+        echo "  SSH session: $(is_ssh_session && echo "Yes" || echo "No")"
+        echo "  Display server: $(get_display_server)"
+        echo "  Pipe exists: $([[ -p "$CLIP_PIPE" ]] && echo "Yes" || echo "No")"
+        exit 1
+        ;;
+esac
