@@ -33,4 +33,9 @@ if [[ -z $ZELLIJ ]] && [[ -z $zellij_running ]]; then
   exit 0
 fi
 
-zellij pipe --plugin $plugin -- "-s $session_name -c $selected"
+if timeout 2s zellij pipe --plugin "$plugin" --skip-plugin-cache -- "--session $session_name --cwd $selected"; then
+  exit 0
+fi
+
+echo "plugin pipe timed out, most probable cause is a permission issue, so give proper permissions to the plugin and try again."
+zellij action launch-plugin "$plugin" --skip-plugin-cache
