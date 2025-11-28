@@ -1,0 +1,39 @@
+#!/bin/sh
+
+PREFIX="safe_buffer_$(date +%s)_"
+count=1
+script_name=$(basename "$0")
+
+echo "--- Phase 1: Normalizing to safe temporary names ---"
+
+ls -v | while read -r file; do
+    if [[ -d "$file" ]] || [[ "$file" == "$script_name" ]]; then continue; fi
+    if [[ "$file" == "$PREFIX"* ]]; then continue; fi
+
+    target_name="${PREFIX}$(printf "%02d.png" "$count")"
+    
+    ext="${file##*.}"
+    ext="${ext,,}"
+    if [[ "$ext" == "png" ]]; then
+        echo "Renaming: $file -> $target_name"
+        mv "$file" "$target_name"
+    else
+        echo "Converting: $file -> $target_name"
+        ffmpeg -loglevel error -i "$file" -y "$target_name" < /dev/null
+        
+        if [[ -f "$target_name" ]]; then
+            if which del > /dev/null 2>&1; then del "$file"; else rm "$file"; fi
+        fi
+    fi
+
+    ((count++))
+done
+
+echo "--- Phase 2: Renaming to final sequence ---"
+
+for file in ${PREFIX}*; do
+    final_name="${file#$PREFIX}"
+    mv "$file" "$final_name"
+done
+
+echo "Done."
