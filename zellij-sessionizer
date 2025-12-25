@@ -18,7 +18,7 @@ if [[ -z $plugin ]]; then
   exit 1
 fi
 
-selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/www/s/**/* ~/www/w/**/* | fzf)
+selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/src/**/* ~/org/**/* | fzf)
 session_name=$(basename "$selected" | tr . _)
 
 if [[ -d $1 ]]; then

@@ -3,7 +3,7 @@
 if [[ $# -eq 1 ]]; then
   selected=$1
 else
-  selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/www/s/**/* ~/www/w/**/* | fzf)
+  selected=$(fd --type d --max-depth 1 --min-depth 1 . ~/src/**/* ~/org/**/* | fzf)
 fi
 
 if [[ -z $selected ]]; then
