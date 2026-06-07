@@ -7,7 +7,9 @@ is_ssh_session() {
 }
 
 get_display_server() {
-    if [[ -n "$WAYLAND_DISPLAY" ]]; then
+    if [[ "$OSTYPE" == darwin* ]]; then
+        echo "macos"
+    elif [[ -n "$WAYLAND_DISPLAY" ]]; then
         echo "wayland"
     elif [[ -n "$DISPLAY" ]]; then
         echo "xorg"
@@ -35,6 +37,9 @@ copy_to_clipboard() {
             "xorg")
                 echo "$text" | xclip -selection clipboard
                 ;;
+            "macos")
+                echo "$text" | pbcopy
+                ;;
             *)
                 echo "Error: Unknown display server" >&2
                 return 1
@@ -59,6 +64,9 @@ paste_from_clipboard() {
                 ;;
             "xorg")
                 xclip -selection clipboard -o
+                ;;
+            "macos")
+                pbpaste
                 ;;
             *)
                 echo "Error: Unknown display server" >&2
